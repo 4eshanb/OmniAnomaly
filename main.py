@@ -9,6 +9,18 @@ from argparse import ArgumentParser
 from pprint import pformat, pprint
 
 import numpy as np
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+with warnings.catch_warnings():
+    warnings.simplefilter(action='ignore', category=DeprecationWarning)
+
+
+def patch_asscalar(a):
+    return a.item()
+
+setattr(np, "asscalar", patch_asscalar)
+
 import tensorflow as tf
 from tfsnippet.examples.utils import MLResults, print_with_title
 from tfsnippet.scaffold import VariableSaver
@@ -23,7 +35,7 @@ from omni_anomaly.utils import get_data_dim, get_data, save_z
 
 class ExpConfig(Config):
     # dataset configuration
-    dataset = "machine-1-1"
+    dataset = "SMAP"
     x_dim = get_data_dim(dataset)
 
     # model architecture configuration
@@ -38,7 +50,7 @@ class ExpConfig(Config):
     dense_dim = 500
     posterior_flow_type = 'nf'  # 'nf' or None
     nf_layers = 20  # for nf
-    max_epoch = 10
+    max_epoch = 2 #10
     train_start = 0
     max_train_size = None  # `None` means full train set
     batch_size = 50
@@ -73,7 +85,7 @@ class ExpConfig(Config):
     # SMD group 1: 0.0050
     # SMD group 2: 0.0075
     # SMD group 3: 0.0001
-    level = 0.01
+    level = 0.07
 
     # outputs config
     save_z = False  # whether to save sampled z in hidden space
@@ -92,10 +104,15 @@ def main():
     )
 
     # prepare the data
+    # get data from pkl files
+    # return shapes: (([train_size, x_dim], [train_size] or None), ([test_size, x_dim], [test_size]))
     (x_train, _), (x_test, y_test) = \
-        get_data(config.dataset, config.max_train_size, config.max_test_size, train_start=config.train_start,
+        get_data(config.dataset, 
+                 config.max_train_size, 
+                 config.max_test_size, 
+                 train_start=config.train_start,
                  test_start=config.test_start)
-
+    
     # construct the model under `variable_scope` named 'model'
     with tf.variable_scope('model') as model_vs:
         model = OmniAnomaly(config=config, name="model")
@@ -113,10 +130,17 @@ def main():
                           valid_step_freq=config.valid_step_freq)
 
         # construct the predictor
-        predictor = Predictor(model, batch_size=config.batch_size, n_z=config.test_n_z,
+        predictor = Predictor(model, 
+                              batch_size=config.batch_size, 
+                              n_z=config.test_n_z,
                               last_point_only=True)
 
-        with tf.Session().as_default():
+        tf_config = tf.ConfigProto()
+        tf_config.gpu_options.allow_growth = True
+        tf_config.gpu_options.per_process_gpu_memory_fraction = 0.9
+        tf_config.allow_soft_placement = True
+
+        with tf.Session(config=tf_config): # .as_default():
 
             if config.restore_dir is not None:
                 # Restore variables from `save_dir`.

@@ -32,8 +32,19 @@ cd data && wget https://raw.githubusercontent.com/khundman/telemanom/master/labe
 
 (virtualenv is recommended)
 
+
+##### For GPU 
+
 ```shell
+conda install tensorflow==1.12.0
 pip install -r requirements.txt
+```
+
+##### For no GPU 
+
+```shell
+conda install tensorflow==1.12.0
+pip install -r _requirements_no_gpu.txt
 ```
 
 #### Preprocess the data
